@@ -1,0 +1,219 @@
+// Firestore Security Rules - WhatsApp Collections
+// Add these rules to existing firestore.rules
+
+// ==================== WHATSAPP_BUSINESS_ACCOUNTS ====================
+
+match /WHATSAPP_BUSINESS_ACCOUNTS/{wabaId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  resource.data.ownerId == request.auth.uid ||
+                  isAdminOfWaba(wabaId));
+  
+  allow create: if isSuperAdmin() && 
+                   request.resource.data.ownerId == request.auth.uid;
+  
+  allow update: if isSuperAdmin() || 
+                   (resource.data.ownerId == request.auth.uid &&
+                    !resource.data.accountId.changes()); // Can't change Meta ID
+  
+  allow delete: if isSuperAdmin();
+  
+  // Helper function
+  function isAdminOfWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_PHONE_NUMBERS ====================
+
+match /WHATSAPP_PHONE_NUMBERS/{phoneNumberId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  resource.data.userId == request.auth.uid ||
+                  isAdminOfPhoneWaba(resource.data.wabaId));
+  
+  allow create: if isSignedIn() && 
+                   (isSuperAdmin() ||
+                    isAdminOfPhoneWaba(request.resource.data.wabaId)) &&
+                   request.resource.data.accessTokenEncrypted != null;
+  
+  allow update: if isSignedIn() && 
+                   (isSuperAdmin() || 
+                    isAdminOfPhoneWaba(resource.data.wabaId)) &&
+                   !resource.data.phoneNumberId.changes(); // Can't change Meta ID
+  
+  allow delete: if isSuperAdmin() || 
+                   isAdminOfPhoneWaba(resource.data.wabaId);
+  
+  // Helper function
+  function isAdminOfPhoneWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_TEMPLATES ====================
+
+match /WHATSAPP_TEMPLATES/{templateId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  resource.data.teamLeadId == request.auth.uid ||
+                  canAccessWaba(resource.data.wabaId));
+  
+  allow create: if isSupervisor() && 
+                   request.resource.data.teamLeadId == request.auth.uid;
+  
+  allow update: if isSignedIn() && 
+                   (isSuperAdmin() || 
+                    (resource.data.teamLeadId == request.auth.uid &&
+                     resource.data.status == 'PENDING')); // Only update pending templates
+  
+  allow delete: if isSuperAdmin() || 
+                   (resource.data.teamLeadId == request.auth.uid && 
+                    resource.data.status == 'REJECTED');
+  
+  // Helper function
+  function canAccessWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_MESSAGES ====================
+
+match /WHATSAPP_MESSAGES/{messageId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  resource.data.userId == request.auth.uid ||
+                  canAccessMessageWaba(resource.data.wabaId));
+  
+  allow create: if isSignedIn() && 
+                   request.resource.data.userId == request.auth.uid;
+  
+  allow update: if isSignedIn() && 
+                   (isSuperAdmin() ||
+                    resource.data.userId == request.auth.uid) &&
+                   !resource.data.messageId.changes(); // Can't change WhatsApp message ID
+  
+  allow delete: if false; // Messages immutable for audit trail
+  
+  // Helper function
+  function canAccessMessageWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_WEBHOOKS ====================
+
+match /WHATSAPP_WEBHOOKS/{webhookId} {
+  allow read: if isSuperAdmin() || 
+                 isAdmin() ||
+                 canAccessWebhookWaba(resource.data.wabaId);
+  
+  allow create: if request.auth == null && 
+                   request.resource.data.webhookSignature != null; // Webhook can create
+  
+  allow update: if isSuperAdmin() ||
+                   (request.auth != null && 
+                    canAccessWebhookWaba(resource.data.wabaId) &&
+                    resource.data.processed == false);
+  
+  allow delete: if isSuperAdmin();
+  
+  // Helper function
+  function canAccessWebhookWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_CONTACTS ====================
+
+match /WHATSAPP_CONTACTS/{contactId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  canAccessContactWaba(resource.data.wabaId));
+  
+  allow create: if isSignedIn() && 
+                   canAccessContactWaba(request.resource.data.wabaId);
+  
+  allow update: if isSignedIn() && 
+                   canAccessContactWaba(resource.data.wabaId);
+  
+  allow delete: if isSuperAdmin() || 
+                   canAccessContactWaba(resource.data.wabaId);
+  
+  // Helper function
+  function canAccessContactWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_CONVERSATION_SESSIONS ====================
+
+match /WHATSAPP_CONVERSATION_SESSIONS/{sessionId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  resource.data.userId == request.auth.uid ||
+                  canAccessSessionWaba(resource.data.wabaId));
+  
+  allow create: if isSignedIn() && 
+                   canAccessSessionWaba(request.resource.data.wabaId);
+  
+  allow update: if isSignedIn() && 
+                   (isSuperAdmin() ||
+                    resource.data.userId == request.auth.uid ||
+                    canAccessSessionWaba(resource.data.wabaId));
+  
+  allow delete: if isSuperAdmin() || 
+                   canAccessSessionWaba(resource.data.wabaId);
+  
+  // Helper function
+  function canAccessSessionWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_METRICS ====================
+
+match /WHATSAPP_METRICS/{metricId} {
+  allow read: if isSignedIn() && 
+                 (isSuperAdmin() || 
+                  isAdmin() ||
+                  canAccessMetricsWaba(resource.data.wabaId));
+  
+  allow create: if (isSuperAdmin() || 
+                    isAdmin()) &&
+                   request.auth != null;
+  
+  allow update: if isSuperAdmin() || 
+                   isAdmin();
+  
+  allow delete: if isSuperAdmin();
+  
+  // Helper function
+  function canAccessMetricsWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}
+
+// ==================== WHATSAPP_ERRORS ====================
+
+match /WHATSAPP_ERRORS/{errorId} {
+  allow read: if isSuperAdmin() || 
+                 isAdmin() ||
+                 (isSignedIn() && canAccessErrorWaba(resource.data.wabaId));
+  
+  allow create: if isSignedIn() || 
+                   request.auth == null; // Can be created by webhook
+  
+  allow update: if isSuperAdmin() || 
+                   isAdmin() ||
+                   (isSignedIn() && 
+                    canAccessErrorWaba(resource.data.wabaId) &&
+                    resource.data.resolved == false);
+  
+  allow delete: if isSuperAdmin();
+  
+  // Helper function
+  function canAccessErrorWaba(wabaId) {
+    return get(/databases/$(database)/documents/WHATSAPP_BUSINESS_ACCOUNTS/$(wabaId)).data.ownerId == request.auth.uid;
+  }
+}

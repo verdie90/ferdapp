@@ -6,6 +6,9 @@ const publicRoutes = [
   '/auth/register',
   '/auth/forgot-password',
   '/public',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/refresh',
 ];
 
 export function middleware(request: NextRequest) {
@@ -18,7 +21,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check if user has auth token
+  // Dashboard routes will handle auth checks on the client side
+  // (using localStorage which middleware can't access)
+  if (path.startsWith('/dashboard')) {
+    return NextResponse.next();
+  }
+
+  // For other protected routes, check for token in cookies
   const token = request.cookies.get('auth_token')?.value;
 
   if (!token) {

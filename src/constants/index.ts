@@ -1,19 +1,34 @@
 export const COLLECTIONS = {
-  USERS: 'users',
-  ROLES: 'roles',
-  PERMISSIONS: 'permissions',
-  ORGANIZATIONS: 'organizations',
-  ROLE_ASSIGNMENTS: 'role_assignments',
-  WHATSAPP_ACCOUNTS: 'whatsapp_accounts',
-  WHATSAPP_MESSAGES: 'whatsapp_messages',
-  AI_AGENTS: 'ai_agents',
-  AI_CONVERSATIONS: 'ai_conversations',
-  RESPONSE_RULES: 'response_rules',
-  MESSAGE_TEMPLATES: 'message_templates',
-  BROADCASTS: 'broadcasts',
-  CONTACTS: 'contacts',
-  AUDIT_LOGS: 'audit_logs',
-  WEBHOOK_LOGS: 'webhook_logs',
+  // Core
+  USERS: 'USERS',
+  AUDIT_LOGS: 'AUDIT_LOGS',
+  
+  // AI System
+  AI_AGENTS: 'AI_AGENTS',
+  AI_BEHAVIOURS: 'AI_BEHAVIOURS',
+  AI_KNOWLEDGE: 'AI_KNOWLEDGE',
+  
+  // WhatsApp System (Generic)
+  WHATSAPP_DEVICES: 'WHATSAPP_DEVICES',
+  CHATS: 'CHATS',
+  
+  // WhatsApp Cloud API Integration
+  WHATSAPP_BUSINESS_ACCOUNTS: 'WHATSAPP_BUSINESS_ACCOUNTS',
+  WHATSAPP_PHONE_NUMBERS: 'WHATSAPP_PHONE_NUMBERS',
+  WHATSAPP_TEMPLATES: 'WHATSAPP_TEMPLATES',
+  WHATSAPP_MESSAGES: 'WHATSAPP_MESSAGES',
+  WHATSAPP_CONTACTS: 'WHATSAPP_CONTACTS',
+  WHATSAPP_CONVERSATION_SESSIONS: 'WHATSAPP_CONVERSATION_SESSIONS',
+  WHATSAPP_WEBHOOKS: 'WHATSAPP_WEBHOOKS',
+  WHATSAPP_METRICS: 'WHATSAPP_METRICS',
+  WHATSAPP_ERRORS: 'WHATSAPP_ERRORS',
+  
+  // Contact Management
+  CONTACTS: 'CONTACTS',
+  
+  // Campaign Management
+  MESSAGE_TEMPLATES: 'MESSAGE_TEMPLATES',
+  BROADCASTS: 'BROADCASTS',
 } as const;
 
 export const FIRESTORE_INDEXES = {
@@ -43,28 +58,27 @@ export const FIRESTORE_INDEXES = {
 export const RBAC_HIERARCHY = {
   SUPERADMIN: {
     level: 1,
-    canManage: ['admin', 'organizations'],
-    permissions: ['create', 'read', 'update', 'delete', 'manage'],
+    label: 'Super Administrator',
+    canManage: ['admin', 'organizations', 'all'],
+    permissions: ['create', 'read', 'update', 'delete', 'manage', 'audit'],
   },
   ADMIN: {
     level: 2,
+    label: 'Administrator',
     canManage: ['supervisor', 'users', 'organization_settings'],
-    permissions: ['create', 'read', 'update', 'delete'],
+    permissions: ['create', 'read', 'update', 'delete', 'manage'],
   },
   SUPERVISOR: {
     level: 3,
-    canManage: ['users', 'templates', 'broadcasts', 'contacts', 'ai_agents'],
+    label: 'Supervisor',
+    canManage: ['users', 'templates', 'broadcasts', 'contacts', 'ai_agents', 'chats'],
     permissions: ['create', 'read', 'update', 'delete'],
   },
   USER: {
     level: 4,
-    canManage: ['own_profile', 'own_whatsapp_account'],
-    permissions: ['read', 'update'],
-  },
-  AI_AGENT: {
-    level: 5,
-    canManage: [],
-    permissions: ['read'],
+    label: 'Regular User',
+    canManage: ['own_profile', 'own_whatsapp_device', 'own_chats'],
+    permissions: ['read', 'update', 'send_message'],
   },
 } as const;
 
@@ -89,6 +103,12 @@ export const ERROR_CODES = {
   // WhatsApp errors
   WHATSAPP_ACCOUNT_NOT_FOUND: 'WHATSAPP_ACCOUNT_NOT_FOUND',
   WHATSAPP_API_ERROR: 'WHATSAPP_API_ERROR',
+  WHATSAPP_WEBHOOK_ERROR: 'WHATSAPP_WEBHOOK_ERROR',
+  WHATSAPP_TEMPLATE_ERROR: 'WHATSAPP_TEMPLATE_ERROR',
+  WHATSAPP_MESSAGE_FAILED: 'WHATSAPP_MESSAGE_FAILED',
+  WHATSAPP_INVALID_PHONE: 'WHATSAPP_INVALID_PHONE',
+  WHATSAPP_RATE_LIMITED: 'WHATSAPP_RATE_LIMITED',
+  WHATSAPP_QUALITY_RED: 'WHATSAPP_QUALITY_RED',
   INVALID_PHONE_NUMBER: 'INVALID_PHONE_NUMBER',
 
   // Server errors

@@ -1,0 +1,270 @@
+// Firestore Security Rules
+// Deploy with: firebase deploy --only firestore:rules
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== HELPER FUNCTIONS ====================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isSuperAdmin() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    
+    function isAdmin() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isSupervisor() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.role == 'supervisor';
+    }
+    
+    function isRegularUser() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.role == 'user';
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.role;
+    }
+    
+    function getUserAdminId() {
+      return get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.adminId;
+    }
+    
+    function getUserSupervisorId() {
+      return get(/databases/$(database)/documents/USERS/$(request.auth.uid)).data.supervisorId;
+    }
+    
+    function canManageUser(targetUserId) {
+      // Superadmin can manage anyone
+      if (isSuperAdmin()) return true;
+      
+      // Admin can manage supervisors and users under them
+      if (isAdmin()) {
+        let targetUser = get(/databases/$(database)/documents/USERS/$(targetUserId)).data;
+        return targetUser.adminId == request.auth.uid;
+      }
+      
+      // Supervisor can manage users assigned to them
+      if (isSupervisor()) {
+        let targetUser = get(/databases/$(database)/documents/USERS/$(targetUserId)).data;
+        return targetUser.supervisorId == request.auth.uid;
+      }
+      
+      return false;
+    }
+    
+    // ==================== USERS COLLECTION ====================
+    
+    match /USERS/{userId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      isAdmin() || 
+                      userId == request.auth.uid);
+      
+      allow create: if isSuperAdmin() || 
+                       (isAdmin() && resource.data.role in ['supervisor', 'user']);
+      
+      allow update: if isSuperAdmin() || 
+                       (canManageUser(userId) && 
+                        !resource.data.role.changes() || 
+                        resource.data.role.changes() in [['user', 'supervisor'], ['supervisor', 'user']]);
+      
+      allow delete: if isSuperAdmin();
+    }
+    
+    // ==================== AI_AGENTS COLLECTION ====================
+    
+    match /AI_AGENTS/{agentId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        (isSupervisor() || isRegularUser()) && 
+                        request.resource.data.userId == request.auth.uid);
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.userId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.userId == request.auth.uid;
+    }
+    
+    // ==================== AI_BEHAVIOURS COLLECTION ====================
+    
+    match /AI_BEHAVIOURS/{behaviourId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.userId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.userId == request.auth.uid;
+    }
+    
+    // ==================== AI_KNOWLEDGE COLLECTION ====================
+    
+    match /AI_KNOWLEDGE/{knowledgeId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.userId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.userId == request.auth.uid;
+    }
+    
+    // ==================== WHATSAPP_DEVICES COLLECTION ====================
+    
+    match /WHATSAPP_DEVICES/{deviceId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.userId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.userId == request.auth.uid;
+    }
+    
+    // ==================== CONTACTS COLLECTION ====================
+    
+    match /CONTACTS/{contactId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.supervisorId == request.auth.uid || 
+                      resource.data.assignedUserId == request.auth.uid);
+      
+      allow create: if isSupervisor() && 
+                       request.resource.data.supervisorId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.supervisorId == request.auth.uid || 
+                        resource.data.assignedUserId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.supervisorId == request.auth.uid;
+    }
+    
+    // ==================== BROADCASTS COLLECTION ====================
+    
+    match /BROADCASTS/{broadcastId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.supervisorId == request.auth.uid || 
+                      request.auth.uid in resource.data.assignedUserIds);
+      
+      allow create: if isSupervisor() && 
+                       request.resource.data.supervisorId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.supervisorId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.supervisorId == request.auth.uid;
+    }
+    
+    // ==================== MESSAGE_TEMPLATES COLLECTION ====================
+    
+    match /MESSAGE_TEMPLATES/{templateId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.supervisorId == request.auth.uid);
+      
+      allow create: if isSupervisor() && 
+                       request.resource.data.supervisorId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.supervisorId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.supervisorId == request.auth.uid;
+    }
+    
+    // ==================== CHATS COLLECTION ====================
+    
+    match /CHATS/{chatId} {
+      allow read: if isSignedIn() && 
+                     (isSuperAdmin() || 
+                      resource.data.supervisorId == request.auth.uid || 
+                      resource.data.userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        resource.data.supervisorId == request.auth.uid || 
+                        resource.data.userId == request.auth.uid);
+      
+      allow delete: if isSuperAdmin() || 
+                       resource.data.supervisorId == request.auth.uid;
+      
+      // Messages subcollection
+      match /MESSAGES/{messageId} {
+        allow read: if isSignedIn() && 
+                       (isSuperAdmin() || 
+                        get(/databases/$(database)/documents/CHATS/$(chatId)).data.supervisorId == request.auth.uid || 
+                        get(/databases/$(database)/documents/CHATS/$(chatId)).data.userId == request.auth.uid);
+        
+        allow create: if isSignedIn() && 
+                         (get(/databases/$(database)/documents/CHATS/$(chatId)).data.userId == request.auth.uid || 
+                          request.resource.data.senderType == 'contact');
+        
+        allow update: if false; // Messages tidak boleh diupdate
+        
+        allow delete: if isSuperAdmin();
+      }
+    }
+    
+    // ==================== AUDIT_LOGS COLLECTION ====================
+    
+    match /AUDIT_LOGS/{logId} {
+      allow read: if isSuperAdmin() || isAdmin();
+      
+      allow create: if isSignedIn();
+      
+      allow update: if false; // Audit logs tidak boleh diupdate
+      
+      allow delete: if isSuperAdmin();
+    }
+    
+    // ==================== Default Deny ====================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
